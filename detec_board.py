@@ -24,12 +24,12 @@ import helper as H
 
 class Calib:
 
-    def __init__(self):
+    def __init__(self, camera):
         self.win_names = ('Raw', 'Canny', 'Dilation', 'Calibration')
         self.win_size = (640, 480)
-        self.camera = None
-        self.cam_width = None
-        self.cam_height = None
+        self.camera = camera
+        self.cam_width = int(self.camera.get(cv2.CAP_PROP_FRAME_WIDTH))
+        self.cam_height = int(self.camera.get(cv2.CAP_PROP_FRAME_HEIGHT))
         self.T1 = np.float32([[1, 0, -4], [0, 1, -3]])
         self.T2 = np.float32([[1, 0, 5], [0, 1, 4]])
         self.maxT = None
@@ -38,21 +38,6 @@ class Calib:
         self.d_iter = None
         self.e_iter = None
         self.roi = None
-
-    # Jetson onboard camera
-    def open_onboard_camera(self):
-        self.camera = cv2.VideoCapture(
-            "nvcamerasrc ! video/x-raw(memory:NVMM), width=(int)640, height=(int)480, format=(string)I420, framerate=(fraction)30/1 ! nvvidconv ! video/x-raw, format=(string)BGRx ! videoconvert ! video/x-raw, format=(string)BGR ! appsink")
-        self.cam_width = int(self.camera.get(cv2.CAP_PROP_FRAME_WIDTH))
-        self.cam_height = int(self.camera.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        return self.camera
-
-    # Open an external usb camera /dev/videoX
-    def open_camera_device(self, device_number):
-        self.camera = cv2.VideoCapture(device_number)
-        self.cam_width = int(self.camera.get(cv2.CAP_PROP_FRAME_WIDTH))
-        self.cam_height = int(self.camera.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        return self.camera
 
     def create_windows(self):
         win_size = self.win_size
@@ -101,12 +86,12 @@ class Calib:
             src_gray = cv2.blur(src_gray, (3, 3))
             canny_output = cv2.Canny(src_gray, self.minT, self.maxT)
 
-            if k_size == 0:
+            if self.k_size == 0:
                 wrapped = canny_output
             else:
                 kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (self.k_size, self.k_size))
-                dilation = cv2.dilate(canny_output, self.kernel, iterations=self.d_iter)
-                closed = cv2.morphologyEx(dilation, cv2.MORPH_CLOSE, self.kernel)
+                dilation = cv2.dilate(canny_output, kernel, iterations=self.d_iter)
+                closed = cv2.morphologyEx(dilation, cv2.MORPH_CLOSE, kernel)
                 erode = cv2.erode(closed, kernel, iterations=self.e_iter)
                 wrapped = cv2.warpAffine(erode, self.T1, (self.cam_width, self.cam_height))
 
@@ -139,67 +124,6 @@ class Calib:
         self.checkCamera()
         self.get_roi()
         # self.show()
-#
-# def calib(cam):
-#     cap = cv2.VideoCapture(cam)
-#
-#     win_name = ['Canny', 'Dilation', 'Calibration']
-#     for name in win_name:
-#         cv2.namedWindow(name, cv2.WINDOW_GUI_EXPANDED)
-#         cv2.resizeWindow(name,640,480)
-#
-#
-#     cv2.createTrackbar('max_canny', win_name[0], 100, 255, lambda *args: None)
-#     cv2.createTrackbar('min_canny', win_name[0], 50, 255, lambda *args: None)
-#
-#
-# #     Check if camera opened successfully
-#     if (cap.isOpened() == False):
-#         print("Error opening video stream or file")
-#         cap.release()
-#         cv2.destroyAllWindows()
-#         return None
-#
-#     while True:
-#         ret, frame0 = cap.read()
-#         if ret:
-#             rows,cols,ch = frame0.shape
-#             T1 = np.float32([[1,0,-4],[0,1,-3]])
-#             T2 = np.float32([[1,0,5],[0,1,4]])
-#             break
-#     while True:
-#         maxT=cv2.getTrackbarPos('canny_max_thresh', win_name[0])
-#         minT=cv2.getTrackbarPos('canny_min_thresh', win_name[0])
-#
-#         ret, frame = cap.read()
-#         src_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-#         src_gray = cv2.blur(src_gray, (3,3))
-#         canny_output = cv2.Canny(src_gray, minT, maxT )
-#         kernel = np.ones((2,2),np.uint8)
-#         dilation = cv2.dilate(canny_output,kernel,iterations = 3)
-#             dilation = cv2.morphologyEx(dilation, cv2.MORPH_CLOSE, kernel)
-#         dilation = cv2.erode(dilation,kernel,iterations = 3)
-#         dilation = cv2.warpAffine(dilation,T1,(cols,rows))
-#         board = H.findBiggestContour(dilation)
-#         if board is False:
-#             cv2.imshow(source_window,canny_output)
-#             if cv2.waitKey(5) & 0xFF == ord('q'):
-#                 break
-#             continue
-#         cv2.drawContours(frame, board, -1, (0,0,255), 1)
-#         rect = cv2.boundingRect(board[0])
-#         x,y,w,h = H.wrap_digit(rect, 5, False)
-#         cv2.rectangle(frame, (x,y), (x+w, y+h), (0, 255, 0), 2)
-#         roi = (y, y+h, x, x+w)
-#         cv2.imshow(win_name[0],canny_output)
-#         cv2.imshow(win_name[1],dilation)
-#         cv2.imshow(win_name[2],frame)
-#         if cv2.waitKey(5) & 0xFF == ord('q'):
-#             break
-#     cap.release()
-#     cv2.destroyAllWindows()
-#
-#     return np.array(roi)
 
 
 def extracCells(roi,cam=0):
@@ -437,11 +361,9 @@ def detect(img):
           # Break the loop
 # When everything done, release the video capture object
 if __name__ == '__main__':
-    calibration = Calib()
-    camera = calibration.open_camera_device(1)
-    calibration.run()
-    print(calibration.cam_height)
-    print(calibration.cam_width)
+    camera = H.open_camera_device(0)
+    calibration = Calib(camera)
+    # calibration.run()
     # calibration.show()
     # cam = cv2.VideoCapture(1)
     # while True:
