@@ -32,11 +32,11 @@ class Calib:
         self.cam_height = int(self.camera.get(cv2.CAP_PROP_FRAME_HEIGHT))
         self.T1 = np.float32([[1, 0, -4], [0, 1, -3]])
         self.T2 = np.float32([[1, 0, 5], [0, 1, 4]])
-        self.maxT = None
-        self.minT = None
-        self.k_size = None
-        self.d_iter = None
-        self.e_iter = None
+        self.maxT = 100
+        self.minT = 50
+        self.k_size = 3
+        self.d_iter = 3
+        self.e_iter = 2
         self.roi = None
 
     def create_windows(self):
@@ -98,7 +98,7 @@ class Calib:
             board = H.findBiggestContour(wrapped)
 
             if board is False:
-                cv2.imshow(self.win_names[1], frame)
+                cv2.imshow(self.win_names[1], wrapped)
                 if cv2.waitKey(5) & 0xFF == ord('q'):
                     break
                 continue
@@ -115,9 +115,86 @@ class Calib:
             if cv2.waitKey(5) & 0xFF == ord('q'):
                 break
 
-        self.camera.release()
+        # self.camera.release()
         cv2.destroyAllWindows()
         return self.roi
+
+    def set_roi(self, new_roi=()):
+        if len(new_roi) == 0:
+            self.roi = np.floor([self.cam_height / 5, self.cam_height * 4 / 5,
+                                 self.cam_width / 5, self.cam_width * 4 / 5]).astype(int)
+        elif len(new_roi) == 4:
+            self.roi = new_roi
+        else:
+            raise Exception("roi need to be length 4")
+
+    def apply_roi(self, img):
+        copy = img.copy()
+        copy = copy[self.roi[0]:self.roi[1], self.roi[2]:self.roi[3]]
+        return copy
+
+    def view_by_roi(self):
+
+        while True:
+            _, frame = self.camera.read()
+            frame = self.apply_roi(frame)
+            cv2.imshow('view roi', frame)
+            if cv2.waitKey(5) & 0xFF == ord('q'):
+                break
+        cv2.destroyAllWindows()
+
+    def get_cells(self):
+        source_window = 'cells'
+        while True:
+            ret, frame = self.camera.read()
+
+            if not ret:
+                continue
+
+            roi_frame = self.apply_roi(frame)
+            src_gray = cv2.cvtColor(roi_frame, cv2.COLOR_BGR2GRAY)
+            src_gray = cv2.blur(src_gray, (3, 3))
+            canny_output = cv2.Canny(src_gray, self.minT, self.maxT)
+
+            if self.k_size == 0:
+                wrapped = canny_output
+            else:
+                kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (self.k_size, self.k_size))
+                dilation = cv2.dilate(canny_output, kernel, iterations=self.d_iter)
+                closed = cv2.morphologyEx(dilation, cv2.MORPH_CLOSE, kernel)
+                erode = cv2.erode(closed, kernel, iterations=self.e_iter)
+                wrapped = cv2.warpAffine(erode, self.T1, (self.cam_width, self.cam_height))
+
+            cells = H.findCells(wrapped)
+            if cells is False:
+                cv2.imshow(source_window, frame)
+                if cv2.waitKey(5) & 0xFF == ord('q'):
+                    break
+                continue
+            cells, bbox = H.sort_contours(cells, "top-to-bottom")
+            cells, bbox = H.sort_contours(cells)
+
+            # Display the resulting frame
+            cnt = []
+            for i in range(len(cells)):
+                cv2.drawContours(frame, cells, i, (0, 255, 0), 1)
+                M = cv2.moments(cells[i])
+                cX = int(M["m10"] / M["m00"])
+                cY = int(M["m01"] / M["m00"])
+                # cv2.circle(copy, (cX, cY), 3, (0, 255, 0), -1)
+                cnt.append((cX, cY))
+                cv2.putText(frame, str(i), (cX, cY), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (100, 200, 50), 2, cv2.LINE_AA)
+            #            cv2.waitKey()
+
+            cv2.imshow(source_window, frame)
+
+            if cv2.waitKey(5) & 0xFF == ord('q'):
+                break
+        self.camera.release()
+        cv2.destroyAllWindows()
+        cells = np.array(cells)
+        cells = np.transpose(cells.reshape((3, 3))).flatten()
+        return cells
 
     def run(self):
         self.create_windows()
@@ -364,15 +441,9 @@ if __name__ == '__main__':
     camera = H.open_camera_device(0)
     calibration = Calib(camera)
     # calibration.run()
-    # calibration.show()
-    # cam = cv2.VideoCapture(1)
-    # while True:
-    #     _, frame = cam.read()
-    #     cv2.imshow('frame', frame)
-    #     cv2.waitKey(5)
-    #
-    # cv2.destroyAllWindows()
-    # cam.release()
+    calibration.set_roi()
+    # calibration.view_by_roi()
+    calibration.get_cells()
 
 
 #    pitch = calib(cam)
