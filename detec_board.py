@@ -66,17 +66,33 @@ class Calib:
         cv2.destroyAllWindows()
 
     def get_roi(self):
+        cv2.createTrackbar('max_canny',  self.win_names[1], self.maxT, 255, lambda *args: None)
+        cv2.createTrackbar('min_canny',  self.win_names[1], self.minT, 255, lambda *args: None)
+        cv2.createTrackbar('kernel_size',  self.win_names[2], 2, 5, lambda *args: None)
+        cv2.createTrackbar('dilate_iter',  self.win_names[2], 3, 5, lambda *args: None)
+        cv2.createTrackbar('erode_iter',  self.win_names[2], 2, 5, lambda *args: None)
+
+        cv2.createTrackbar('transl_x',  self.win_names[3], 0, 5, lambda *args: None)
+        cv2.createTrackbar('transl_y',  self.win_names[3], 0, 5, lambda *args: None)
+        cv2.setTrackbarMin('transl_x', self.win_names[3], -5)
+        cv2.setTrackbarMin('transl_y', self.win_names[3], -5)
+
         while True:
             self.maxT = cv2.getTrackbarPos('max_canny', self.win_names[1])
             self.minT = cv2.getTrackbarPos('min_canny', self.win_names[1])
             self.k_size = cv2.getTrackbarPos('kernel_size', self.win_names[2])
             self.d_iter = cv2.getTrackbarPos('dilate_iter', self.win_names[2])
             self.e_iter = cv2.getTrackbarPos('erode_iter', self.win_names[2])
+            x = cv2.getTrackbarPos('transl_x', self.win_names[3])
+            y = cv2.getTrackbarPos('transl_y', self.win_names[3])
+            self._transl(x, y)
 
             ret, frame = self.camera.read()
 
             if not ret:
+                self.camera.set(cv2.CAP_PROP_POS_FRAMES, 0)
                 continue
+
 
             raw_frame = frame.copy()
             src_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
@@ -90,8 +106,7 @@ class Calib:
                 dilation = cv2.dilate(canny_output, kernel, iterations=self.d_iter)
                 closed = cv2.morphologyEx(dilation, cv2.MORPH_CLOSE, kernel)
                 erode = cv2.erode(closed, kernel, iterations=self.e_iter)
-                wrapped = cv2.warpAffine(erode, self.T1, (self.cam_width, self.cam_height))
-
+                wrapped = cv2.warpAffine(erode, self._T1, (self.cam_width, self.cam_height))
             board = H.findBiggestContour(wrapped)
 
             if board is False:
