@@ -30,26 +30,23 @@ class Calib:
         self.camera = camera
         self.cam_width = int(self.camera.get(cv2.CAP_PROP_FRAME_WIDTH))
         self.cam_height = int(self.camera.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        self.T1 = np.float32([[1, 0, -4], [0, 1, -3]])
-        self.T2 = np.float32([[1, 0, 5], [0, 1, 4]])
+        # self.T2 = np.float32([[1, 0, 5], [0, 1, 4]])
         self.maxT = 100
-        self.minT = 50
+        self.minT = 30
         self.k_size = 3
         self.d_iter = 3
         self.e_iter = 2
         self.roi = None
+
+    def _transl(self, x, y):
+        self._T1 = np.float32([[1, 0, x],
+                               [0, 1, y]])
 
     def create_windows(self):
         win_size = self.win_size
         for name in self.win_names:
             cv2.namedWindow(name, cv2.WINDOW_GUI_EXPANDED)
             cv2.resizeWindow(name, win_size[0], win_size[1])
-
-        cv2.createTrackbar('max_canny',  self.win_names[1], 100, 255, lambda *args: None)
-        cv2.createTrackbar('min_canny',  self.win_names[1], 50, 255, lambda *args: None)
-        cv2.createTrackbar('kernel_size',  self.win_names[2], 1, 5, lambda *args: None)
-        cv2.createTrackbar('dilate_iter',  self.win_names[2], 3, 5, lambda *args: None)
-        cv2.createTrackbar('erode_iter',  self.win_names[2], 2, 5, lambda *args: None)
 
     def checkCamera(self):
         if not self.camera.isOpened():
