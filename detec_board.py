@@ -240,7 +240,7 @@ class brain(calibration):
         self.calibData = calibData
         self.set_roi(calibData.roi)
 
-    def prosses(self, frame):
+    def processes(self, frame):
         # src_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
         # src_gray = cv2.blur(src_gray, (3, 3))
         canny_output = cv2.Canny(frame, self.calibData.minCannyTh, self.calibData.maxCannyTh)
@@ -254,7 +254,7 @@ class brain(calibration):
     def detect(self, img):
         src_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         src_gray = cv2.blur(src_gray, (3, 3))
-        frame = self.prosses(src_gray)
+        frame = self.processes(src_gray)
         cnt = H.findContour(frame)
         circles = cv2.HoughCircles(src_gray, cv2.HOUGH_GRADIENT, 1.5, 50),#param1=100,param2=100,minRadius=10,maxRadius=50)
         print (len(circles.shape))
